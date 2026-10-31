@@ -18,6 +18,7 @@
 #include <string>
 
 #include "cipher_interfaces/msg/cipher_message.hpp"
+#include "cipher_interfaces/srv/cipher_answer.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/string.hpp"
 
@@ -33,6 +34,17 @@ public:
     this->declare_parameter("key", 1);
     publisher_ = this->create_publisher<cipher_interfaces::msg::CipherMessage>(
         "topic", 10);
+    // std::shared_ptr<rclcpp::Node> node =
+    //     rclcpp::Node::make_shared("check_msg_server");
+    service_ = this->create_service<cipher_interfaces::srv::CipherAnswer>(
+        "check_msg", std::bind(&MinimalPublisher::check_msg, this,
+                               std::placeholders::_1, std::placeholders::_2));
+
+    if (!service_) {
+      RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Failed to create service");
+      return;
+    }
+    RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Ready to check answer.");
     timer_ = this->create_wall_timer(
         500ms, std::bind(&MinimalPublisher::timer_callback, this));
   }
@@ -58,9 +70,23 @@ private:
     }
     return message;
   }
+  void
+  check_msg(const std::shared_ptr<cipher_interfaces::srv::CipherAnswer::Request>
+                request,
+            std::shared_ptr<cipher_interfaces::srv::CipherAnswer::Response>
+                response) {
+    response->result =
+        request->answer == this->get_parameter("message").as_string() ? true
+                                                                      : false;
+    RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Incoming request\nanswer: %s",
+                request->answer.c_str());
+    RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "sending back response: [%s]",
+                response->result ? "true" : "false");
+  }
   rclcpp::TimerBase::SharedPtr timer_;
   rclcpp::Publisher<cipher_interfaces::msg::CipherMessage>::SharedPtr
       publisher_;
+  rclcpp::Service<cipher_interfaces::srv::CipherAnswer>::SharedPtr service_;
   size_t count_;
 };
 
